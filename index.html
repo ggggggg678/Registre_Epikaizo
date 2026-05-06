@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><link rel="stylesheet" href="yungking.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Epikaizo- Tableau de bord</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  </head>
+<body>
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-box">
+    <h2>🔐 Admin Epikaizo</h2>
+    <input type="password" id="adminPassword" placeholder="Mot de passe">
+    <button id="loginBtn">Se connecter</button>
+  </div>
+</div>
+
+<div id="adminApp" class="container hidden">
+  <div class="header">
+    <div class="logo-area">
+      <div class="logo-icon">⛪</div>
+      <div class="title">
+        <h1>Epikaizo-Church Admin</h1>
+        <p>Tableau de bord temps réel </p>
+      </div>
+    </div>
+    <button id="logoutBtnAdmin" class="btn-export logout">🚪 Déconnexion</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><h3 id="totalCount">0</h3><p>Total inscrits</p></div>
+    <div class="stat-card"><h3 id="memberCount">0</h3><p>Membres</p></div>
+    <div class="stat-card"><h3 id="visitorCount">0</h3><p>Visiteurs</p></div>
+    <div class="stat-card"><h3 id="todayCount">0</h3><p>Aujourd'hui</p></div>
+  </div>
+
+  <div class="dashboard">
+    <div class="card"><canvas id="trendChart" height="150"></canvas></div>
+    <div class="card">
+      <h4>📄 Exports</h4>
+      <div class="export-buttons">
+        <button id="exportPdfFull" class="btn-export">📑 Export complet PDF (lisible)</button>
+        <button id="exportCsv" class="btn-export">📊 Export CSV</button>
+      </div>
+      <p style="font-size:12px; margin-top:10px;">Données filtrées par recherche / filtre</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="filters" id="filterContainer">
+      <button data-filter="all" class="filter-btn active">Tous</button>
+      <button data-filter="member" class="filter-btn">Membres</button>
+      <button data-filter="visitor" class="filter-btn">Visiteurs</button>
+    </div>
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Rechercher (nom, prénom, lieu)">
+    <div class="table-wrapper">
+      <table id="dataTable">
+        <thead><tr><th>Nom</th><th>Prénom</th><th>Lieu</th><th>Contact</th><th>Statut</th><th>Date</th><th>Action</th></tr></thead>
+        <tbody id="tableBody"></tbody>
+      ~
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+  // Configuration Firebase
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKycoZ7BETwGZdWfecSdE-LhW6S2QteTs",
+    authDomain: "church-epikaizo.firebaseapp.com",
+    databaseURL: "https://church-epikaizo-default-rtdb.firebaseio.com",
+    projectId: "church-epikaizo",
+    storageBucket: "church-epikaizo.firebasestorage.app",
+    messagingSenderId: "31324831614",
+    appId: "1:31324831614:web:1f02294643389f5b6f7d2f",
+    measurementId: "G-VZHBPQWZ3V"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  let allPeople = [];
+  let unsubscribe = null;
+  let currentFilter = 'all';
+  let chartInstance = null;
+
+  const ADMIN_PASSWORD = "Noah";
+
+  function showToast(msg, type='info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = type === 'error' ? '#dc3545' : '#28a745';
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 3000);
+  }
+
+  document.getElementById('loginBtn').onclick = () => {
+    const pwd = document.getElementById('adminPassword').value;
+    if (pwd === ADMIN_PASSWORD) {
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('adminApp').classList.remove('hidden');
+      initRealtimeListener();
+    } else {
+      alert('Mot de passe incorrect');
+    }
+  };
+  document.getElementById('adminPassword').addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') document.getElementById('loginBtn').click();
+  });
+
+  document.getElementById('logoutBtnAdmin').onclick = () => {
+    if (unsubscribe) unsubscribe();
+    document.getElementById('loginOverlay').style.display = 'flex';
+    document.getElementById('adminApp').classList.add('hidden');
+    document.getElementById('adminPassword').value = '';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  };
+
+  function initRealtimeListener() {
+    if (unsubscribe) unsubscribe();
+    unsubscribe = db.collection('presences').orderBy('date', 'desc').onSnapshot(snapshot => {
+      allPeople = [];
+      snapshot.forEach(doc => {
+        let data = doc.data();
+        data.id = doc.id;
+        if (!data.date) data.date = new Date().toISOString();
+        allPeople.push(data);
+      });
+      updateUI();
+    }, error => {
+      console.error(error);
+      showToast('Erreur de connexion Firestore', 'error');
+    });
+  }
+
+  function updateUI() {
+    const total = allPeople.length;
+    const members = allPeople.filter(p => p.is_member === true).length;
+    const visitors = allPeople.filter(p => p.is_member === false).length;
+    const today = allPeople.filter(p => {
+      const d = new Date(p.date);
+      const now = new Date();
+      return d.toDateString() === now.toDateString();
+    }).length;
+    document.getElementById('totalCount').innerText = total;
+    document.getElementById('memberCount').innerText = members;
+    document.getElementById('visitorCount').innerText = visitors;
+    document.getElementById('todayCount').innerText = today;
+    renderTable();
+    updateChart();
+  }
+
+  function getFiltered() {
+    let filtered = [...allPeople];
+    if (currentFilter === 'member') filtered = filtered.filter(p => p.is_member === true);
+    if (currentFilter === 'visitor') filtered = filtered.filter(p => p.is_member === false);
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    if (search) {
+      filtered = filtered.filter(p => 
+        (p.nom || '').toLowerCase().includes(search) ||
+        (p.prenom || '').toLowerCase().includes(search) ||
+        (p.lieu || '').toLowerCase().includes(search)
+      );
+    }
+    return filtered;
+  }
+
+  function escapeHtml(s) { if(!s) return ''; return String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+
+  function renderTable() {
+    const filtered = getFiltered();
+    const tbody = document.getElementById('tableBody');
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7">Aucune inscription</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtered.map(p => `
+      <tr>
+        <td>${escapeHtml(p.nom)}</td>
+        <td>${escapeHtml(p.prenom)}</td>
+        <td>${escapeHtml(p.lieu) || '—'}</td>
+        <td>${escapeHtml(p.contact) || '—'}</td>
+        <td>${p.is_member ? '<span class="member-badge">Membre</span>' : `<span class="visitor-badge">Visiteur (${escapeHtml(p.church_name || '?')})</span>`}</td>
+        <td>${new Date(p.date).toLocaleString('fr-FR')}</td>
+        <td><button class="delete-btn" data-id="${p.id}">🗑️</button></td>
+      </tr>
+    `).join('');
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.onclick = async (e) => {
+        const id = btn.getAttribute('data-id');
+        if (confirm('Supprimer définitivement ?')) {
+          try {
+            await db.collection('presences').doc(id).delete();
+            showToast('Supprimé', 'success');
+          } catch(err) { showToast('Erreur', 'error'); }
+        }
+      };
+    });
+  }
+
+  function updateChart() {
+    const last7 = [];
+    for (let i=6; i>=0; i--) {
+      let d = new Date(); d.setDate(d.getDate()-i);
+      last7.push(d.toISOString().slice(0,10));
+    }
+    const counts = new Array(7).fill(0);
+    allPeople.forEach(p => {
+      const day = new Date(p.date).toISOString().slice(0,10);
+      const idx = last7.indexOf(day);
+      if (idx !== -1) counts[idx]++;
+    });
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: { 
+        labels: last7.map(d => d.slice(5)), 
+        datasets: [{ 
+          label: 'Inscriptions', 
+          data: counts, 
+          backgroundColor: '#1e88e5',
+          borderRadius: 6
+        }] 
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { labels: { color: '#1e88e5', font: { weight: 'bold' } } }
+        }
+      }
+    });
+  }
+
+  document.getElementById('exportPdfFull').onclick = async () => {
+    const data = getFiltered();
+    if (data.length === 0) { showToast('Aucune donnée', 'error'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 136, 229);
+    doc.text("Huperoon-Church - Registre complet", 20, 22);
+    doc.setFontSize(16);
+    doc.setTextColor(80,80,100);
+    doc.text(`Total: ${data.length} personnes · Export ${new Date().toLocaleString('fr-FR')}`, 20, 36);
+    
+    const body = data.map((p,i) => [i+1, p.nom || '', p.prenom || '', p.lieu || '—', p.contact || '—', p.is_member ? 'Membre' : `Visiteur (${p.church_name || ''})`, new Date(p.date).toLocaleString('fr-FR')]);
+    
+    doc.autoTable({
+      head: [['#', 'Nom', 'Prénom', 'Lieu', 'Contact', 'Statut', 'Date']],
+      body: body,
+      startY: 44,
+      styles: { fontSize: 12, cellPadding: 3, valign: 'middle', font: "helvetica" },
+      headStyles: { fillColor: [30, 136, 229], textColor: 255, fontSize: 13, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 248, 252] },
+      margin: { left: 12, right: 12 },
+      columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 }, 3: { cellWidth: 38 }, 4: { cellWidth: 40 }, 5: { cellWidth: 48 }, 6: { cellWidth: 48 } }
+    });
+    doc.save(`huperoon_bleu_${new Date().toISOString().slice(0,10)}.pdf`);
+    showToast('PDF exporté (thème bleu)', 'success');
+  };
+
+  document.getElementById('exportCsv').onclick = () => {
+    const data = getFiltered();
+    if (data.length === 0) { showToast('Aucune donnée', 'error'); return; }
+    const headers = ['Nom','Prénom','Lieu','Contact','Statut','Église (visiteur)','Date'];
+    const rows = data.map(p => [p.nom, p.prenom, p.lieu||'', p.contact||'', p.is_member?'Membre':'Visiteur', p.is_member?'':(p.church_name||''), new Date(p.date).toLocaleString('fr-FR')]);
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\uFEFF" + csv], {type: 'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `huperoon_data_bleu.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('CSV exporté');
+  };
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderTable();
+    };
+  });
+  document.getElementById('searchInput').addEventListener('input', () => renderTable());
+</script>
+</body>
+</html>
