@@ -3,7 +3,7 @@
 <head><link rel="stylesheet" href="yungking.css">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Epikaizo- Tableau de bord</title>
+  <title>Epikaizo - Tableau de bord</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -25,7 +25,7 @@
       <div class="logo-icon">⛪</div>
       <div class="title">
         <h1>Epikaizo-Church Admin</h1>
-        <p>Tableau de bord temps réel </p>
+        <p>Tableau de bord temps réel</p>
       </div>
     </div>
     <button id="logoutBtnAdmin" class="btn-export logout">🚪 Déconnexion</button>
@@ -59,9 +59,11 @@
     <input type="text" id="searchInput" class="search-input" placeholder="🔍 Rechercher (nom, prénom, lieu)">
     <div class="table-wrapper">
       <table id="dataTable">
-        <thead><tr><th>Nom</th><th>Prénom</th><th>Lieu</th><th>Contact</th><th>Statut</th><th>Date</th><th>Action</th></tr></thead>
+        <thead>
+          <tr><th>Nom</th><th>Prénom</th><th>Lieu</th><th>Contact</th><th>Statut</th><th>Date</th><th>Action</th></tr>
+        </thead>
         <tbody id="tableBody"></tbody>
-      ~
+      </table>
     </div>
   </div>
 </div>
@@ -260,8 +262,8 @@
       margin: { left: 12, right: 12 },
       columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 }, 3: { cellWidth: 38 }, 4: { cellWidth: 40 }, 5: { cellWidth: 48 }, 6: { cellWidth: 48 } }
     });
-    doc.save(`Epikaizo_bleu_${new Date().toISOString().slice(0,10)}.pdf`);
-    showToast('PDF exporté (thème bleu)', 'success');
+    doc.save(`Epikaizo_${new Date().toISOString().slice(0,10)}.pdf`);
+    showToast('PDF exporté (Epikaizo)', 'success');
   };
 
   document.getElementById('exportCsv').onclick = () => {
@@ -273,10 +275,10 @@
     const blob = new Blob(["\uFEFF" + csv], {type: 'text/csv'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Epikaizo_data_bleu.csv`;
+    a.download = `Epikaizo_data_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-    showToast('CSV exporté');
+    showToast('CSV exporté (Epikaizo)', 'success');
   };
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
