@@ -243,7 +243,7 @@
     doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 136, 229);
-    doc.text("Huperoon-Church - Registre complet", 20, 22);
+    doc.text("Epikaizo-Church - Registre complet", 20, 22);
     doc.setFontSize(16);
     doc.setTextColor(80,80,100);
     doc.text(`Total: ${data.length} personnes · Export ${new Date().toLocaleString('fr-FR')}`, 20, 36);
@@ -260,7 +260,7 @@
       margin: { left: 12, right: 12 },
       columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 }, 3: { cellWidth: 38 }, 4: { cellWidth: 40 }, 5: { cellWidth: 48 }, 6: { cellWidth: 48 } }
     });
-    doc.save(`huperoon_bleu_${new Date().toISOString().slice(0,10)}.pdf`);
+    doc.save(`Epikaizo_bleu_${new Date().toISOString().slice(0,10)}.pdf`);
     showToast('PDF exporté (thème bleu)', 'success');
   };
 
@@ -273,7 +273,7 @@
     const blob = new Blob(["\uFEFF" + csv], {type: 'text/csv'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `huperoon_data_bleu.csv`;
+    a.download = `Epikaizo_data_bleu.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
     showToast('CSV exporté');
